@@ -22,6 +22,23 @@ python tasks.py --user alice clear
 # add with category
 python tasks.py --user alice add "Buy milk" --category groceries
 
+# add priority
+```powershell
+python tasks.py --user alice add "Pay rent" --category finances --priority
+```
+
+# promote/demote/priorities
+```powershell
+# promote an existing task by index to priority
+python tasks.py --user alice promote 3
+
+# demote (remove priority) from a task
+python tasks.py --user alice demote 3
+
+# list priority tasks for a user
+python tasks.py --user alice priorities
+```
+
 # list only tasks in a category
 python tasks.py --user alice list --category groceries
 ```
@@ -53,6 +70,10 @@ python tasks.py interactive
 
 Fallback behavior
 - If there is no current task set, `recommend` will fall back to selecting a random not-done task and set it as the current task.
+
+Priority behavior
+- Tasks marked with `--priority` (or answered `y` at interactive add) are shown immediately when you enter interactive mode for a user.
+- `recommend` always prefers available priority tasks first, regardless of the chosen style.
 
 
 Interactive mode notes

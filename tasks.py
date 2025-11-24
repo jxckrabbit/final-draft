@@ -68,7 +68,8 @@ def list_tasks(db: Dict[str, List[Dict[str, str]]], user: str, category: str | N
         category = t.get("category", "")
         cat_display = f"[{category}] " if category else ""
         current_marker = ">" if created and current_id and created == current_id else " "
-        print(f"{i}.[{current_marker}] [{status}] {cat_display}{t.get('text')} (added {created})")
+        priority_label = "(!) " if t.get("priority") else ""
+        print(f"{i}.[{current_marker}] [{status}] {priority_label}{cat_display}{t.get('text')} (added {created})")
 
 
 def ensure_user_record(db: Dict[str, object], user: str) -> Dict[str, object]:
@@ -86,17 +87,19 @@ def ensure_user_record(db: Dict[str, object], user: str) -> Dict[str, object]:
     return rec
 
 
-def add_task(db: Dict[str, List[Dict[str, str]]], user: str, text: str, category: str = "") -> None:
+def add_task(db: Dict[str, List[Dict[str, str]]], user: str, text: str, category: str = "", priority: bool = False) -> None:
     rec = ensure_user_record(db, user)
     task = {
         "text": text,
         "created_at": datetime.utcnow().isoformat(),
         "done": False,
         "category": category or "",
+        "priority": bool(priority),
     }
     rec["tasks"].append(task)
     save_db(db)
     print("Added.")
+    
 
 
 def remove_task(db: Dict[str, List[Dict[str, str]]], user: str, index: int) -> None:
@@ -199,8 +202,15 @@ def recommend_task(db: Dict[str, List[Dict[str, str]]], user: str, style: str) -
     rec = ensure_user_record(db, user)
     current_id = rec.get("current", "")
     if not current_id:
-        # Fallback behavior: no current task set — pick a random not-done task as recommendation.
+        # Fallback behavior: no current task set — prefer priority tasks, else pick a random not-done task.
         tasks = rec.get("tasks", [])
+        priority_candidates = [t for t in tasks if t.get("priority") and not t.get("done")]
+        if priority_candidates:
+            chosen = random.choice(priority_candidates)
+            rec["current"] = chosen.get("created_at", "")
+            save_db(db)
+            print(f"No current task set — prioritized fallback recommended and selected: {chosen.get('text')} [{chosen.get('category','')}]")
+            return
         candidates = [t for t in tasks if not t.get("done")]
         if not candidates:
             print("No available (not-done) tasks to recommend.")
@@ -221,6 +231,15 @@ def recommend_task(db: Dict[str, List[Dict[str, str]]], user: str, style: str) -
         return
 
     cur_cat = (current.get("category") or "")
+    # Priority tasks are always preferred regardless of style
+    priority_candidates = [t for t in tasks if t.get("priority") and not t.get("done") and t.get("created_at") != current_id]
+    if priority_candidates:
+        chosen = random.choice(priority_candidates)
+        rec["current"] = chosen.get("created_at", "")
+        save_db(db)
+        print(f"Recommended and selected priority task: {chosen.get('text')} [{chosen.get('category','')}]")
+        return
+
     # choose candidates depending on style
     if style == "type":
         candidates = [t for t in tasks if (t.get("category") or "") == cur_cat and t.get("created_at") != current_id and not t.get("done")]
@@ -239,9 +258,69 @@ def recommend_task(db: Dict[str, List[Dict[str, str]]], user: str, style: str) -
     print(f"Recommended and selected current task: {chosen.get('text')} [{chosen.get('category','')}]")
 
 
+def promote_task(db: Dict[str, List[Dict[str, str]]], user: str, index: int) -> None:
+    rec = db.get(user)
+    if not rec:
+        print(f"No tasks for user '{user}'.")
+        return
+    rec = ensure_user_record(db, user)
+    tasks = rec.get("tasks", [])
+    if index < 1 or index > len(tasks):
+        print("Index out of range.")
+        return
+    tasks[index - 1]["priority"] = True
+    save_db(db)
+    print(f"Promoted task {index} to priority: {tasks[index-1].get('text')}")
+
+
+def demote_task(db: Dict[str, List[Dict[str, str]]], user: str, index: int) -> None:
+    rec = db.get(user)
+    if not rec:
+        print(f"No tasks for user '{user}'.")
+        return
+    rec = ensure_user_record(db, user)
+    tasks = rec.get("tasks", [])
+    if index < 1 or index > len(tasks):
+        print("Index out of range.")
+        return
+    tasks[index - 1]["priority"] = False
+    save_db(db)
+    print(f"Demoted task {index} from priority: {tasks[index-1].get('text')}")
+
+
+def list_priorities(db: Dict[str, List[Dict[str, str]]], user: str) -> None:
+    rec = db.get(user)
+    if not rec:
+        print(f"No tasks for user '{user}'.")
+        return
+    rec = ensure_user_record(db, user)
+    tasks = rec.get("tasks", [])
+    priority_tasks = [(i + 1, t) for i, t in enumerate(tasks) if t.get("priority")]
+    if not priority_tasks:
+        print(f"No priority tasks for user '{user}'.")
+        return
+    for idx, t in priority_tasks:
+        status = "x" if t.get("done") else " "
+        cat = t.get("category", "")
+        cat_display = f"[{cat}] " if cat else ""
+        print(f"{idx}. [{status}] {cat_display}{t.get('text')} (added {t.get('created_at')})")
+
+
 def interactive_mode(user: str) -> None:
     db = load_db()
     print(f"Interactive mode for user '{user}'. Type 'help' for commands.")
+    # Immediately show priority tasks for this user (not-done)
+    rec = db.get(user)
+    if rec:
+        rec = ensure_user_record(db, user)
+        tasks = rec.get("tasks", [])
+        priority_tasks = [(i + 1, t) for i, t in enumerate(tasks) if t.get("priority") and not t.get("done")]
+        if priority_tasks:
+            print("Priority tasks:")
+            for idx, t in priority_tasks:
+                cat = t.get("category", "")
+                cat_display = f"[{cat}] " if cat else ""
+                print(f"{idx}. {cat_display}{t.get('text')}")
     while True:
         try:
             cmd = input(f"{user}> ").strip()
@@ -267,7 +346,12 @@ def interactive_mode(user: str) -> None:
                 cat = input("Category (optional): ").strip()
             except (EOFError, KeyboardInterrupt):
                 cat = ""
-            add_task(db, user, arg, cat)
+            try:
+                pr = input("Priority? (y/N): ").strip().lower()
+            except (EOFError, KeyboardInterrupt):
+                pr = ""
+            is_priority = pr in ("y", "yes")
+            add_task(db, user, arg, cat, is_priority)
             continue
         if action == "list":
             # support: `list` or `list <category>` in interactive mode
@@ -284,6 +368,21 @@ def interactive_mode(user: str) -> None:
                 print("Usage: select <index>")
                 continue
             select_task(db, user, int(arg))
+            continue
+        if action == "promote":
+            if not arg or not arg.isdigit():
+                print("Usage: promote <index>")
+                continue
+            promote_task(db, user, int(arg))
+            continue
+        if action == "demote":
+            if not arg or not arg.isdigit():
+                print("Usage: demote <index>")
+                continue
+            demote_task(db, user, int(arg))
+            continue
+        if action == "priorities":
+            list_priorities(db, user)
             continue
         if action == "recommend":
             # recommend [style]
@@ -326,6 +425,7 @@ def main(argv: List[str] | None = None) -> int:
     p_add = sub.add_parser("add", help="Add a task")
     p_add.add_argument("text", nargs="+", help="Task text")
     p_add.add_argument("--category", "-c", help="Optional category for the task")
+    p_add.add_argument("--priority", "-p", action="store_true", help="Mark the new task as priority")
 
     p_list = sub.add_parser("list", help="List tasks")
     p_list.add_argument("--category", "-c", help="Filter tasks by category")
@@ -347,6 +447,14 @@ def main(argv: List[str] | None = None) -> int:
 
     p_recommend = sub.add_parser("recommend", help="Recommend a task based on current task and style")
     p_recommend.add_argument("--style", "-s", choices=["type", "dispersed"], help="Recommendation style: type or dispersed")
+
+    p_promote = sub.add_parser("promote", help="Mark a task as priority by index")
+    p_promote.add_argument("index", type=int, help="1-based index of task to promote")
+
+    p_demote = sub.add_parser("demote", help="Unmark a task as priority by index")
+    p_demote.add_argument("index", type=int, help="1-based index of task to demote")
+
+    p_priorities = sub.add_parser("priorities", help="List priority tasks for the user")
 
     p_inter = sub.add_parser("interactive", help="Enter interactive mode (prompts for user if omitted)")
 
@@ -373,7 +481,8 @@ def main(argv: List[str] | None = None) -> int:
     if args.cmd == "add":
         text = " ".join(args.text)
         category = getattr(args, "category", "") or ""
-        add_task(db, user, text, category)
+        priority = bool(getattr(args, "priority", False))
+        add_task(db, user, text, category, priority)
         return 0
     if args.cmd == "list":
         list_tasks(db, user, getattr(args, "category", None))
@@ -405,6 +514,15 @@ def main(argv: List[str] | None = None) -> int:
             print("Invalid style. Use 'type' or 'dispersed'.")
             return 2
         recommend_task(db, user, style)
+        return 0
+    if args.cmd == "promote":
+        promote_task(db, user, args.index)
+        return 0
+    if args.cmd == "demote":
+        demote_task(db, user, args.index)
+        return 0
+    if args.cmd == "priorities":
+        list_priorities(db, user)
         return 0
     if args.cmd == "clear":
         clear_tasks(db, user)
