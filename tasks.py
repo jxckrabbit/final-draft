@@ -44,12 +44,19 @@ def list_tasks(db: Dict[str, List[Dict[str, str]]], user: str) -> None:
     for i, t in enumerate(tasks, start=1):
         status = "x" if t.get("done") else " "
         created = t.get("created_at", "")
-        print(f"{i}. [{status}] {t.get('text')} (added {created})")
+        category = t.get("category", "")
+        cat_display = f"[{category}] " if category else ""
+        print(f"{i}. [{status}] {cat_display}{t.get('text')} (added {created})")
 
 
-def add_task(db: Dict[str, List[Dict[str, str]]], user: str, text: str) -> None:
+def add_task(db: Dict[str, List[Dict[str, str]]], user: str, text: str, category: str = "") -> None:
     tasks = db.setdefault(user, [])
-    tasks.append({"text": text, "created_at": datetime.utcnow().isoformat(), "done": False})
+    tasks.append({
+        "text": text,
+        "created_at": datetime.utcnow().isoformat(),
+        "done": False,
+        "category": category or "",
+    })
     save_db(db)
     print("Added.")
 
@@ -111,7 +118,11 @@ def interactive_mode(user: str) -> None:
             if not arg:
                 print("Usage: add <task text>")
                 continue
-            add_task(db, user, arg)
+            try:
+                cat = input("Category (optional): ").strip()
+            except (EOFError, KeyboardInterrupt):
+                cat = ""
+            add_task(db, user, arg, cat)
             continue
         if action == "list":
             list_tasks(db, user)
@@ -142,6 +153,7 @@ def main(argv: List[str] | None = None) -> int:
 
     p_add = sub.add_parser("add", help="Add a task")
     p_add.add_argument("text", nargs="+", help="Task text")
+    p_add.add_argument("--category", "-c", help="Optional category for the task")
 
     p_list = sub.add_parser("list", help="List tasks")
 
@@ -177,7 +189,8 @@ def main(argv: List[str] | None = None) -> int:
     db = load_db()
     if args.cmd == "add":
         text = " ".join(args.text)
-        add_task(db, user, text)
+        category = getattr(args, "category", "") or ""
+        add_task(db, user, text, category)
         return 0
     if args.cmd == "list":
         list_tasks(db, user)
