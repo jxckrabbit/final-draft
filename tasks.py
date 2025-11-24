@@ -15,6 +15,9 @@ import json
 import sys
 from datetime import datetime
 import random
+import os
+import urllib.request
+import urllib.error
 from pathlib import Path
 from typing import Dict, List
 
@@ -306,6 +309,122 @@ def list_priorities(db: Dict[str, List[Dict[str, str]]], user: str) -> None:
         print(f"{idx}. [{status}] {cat_display}{t.get('text')} (added {t.get('created_at')})")
 
 
+def _call_openai_chat(prompt: str) -> str:
+    """Call OpenAI Chat Completions API and return assistant content as string.
+
+    Requires environment variable `OPENAI_API_KEY`. Uses `gpt-3.5-turbo`.
+    Returns the assistant message text or raises on network/HTTP errors.
+    """
+    api_key = os.environ.get("OPENAI_API_KEY")
+    if not api_key:
+        raise RuntimeError("OPENAI_API_KEY not set")
+
+    url = "https://api.openai.com/v1/chat/completions"
+    headers = {
+        "Content-Type": "application/json",
+        "Authorization": f"Bearer {api_key}",
+    }
+    system = {
+        "role": "system",
+        "content": (
+            "You are a task-list generator. Given a short user prompt, produce a JSON array of objects. "
+            "Each object must have at least a 'text' field and may include 'category' and 'priority' (boolean). "
+            "Respond with ONLY valid JSON (the array) and nothing else."
+        ),
+    }
+    user_msg = {"role": "user", "content": prompt}
+    payload = {
+        "model": "gpt-3.5-turbo",
+        "messages": [system, user_msg],
+        "temperature": 0.7,
+        "max_tokens": 800,
+    }
+    data = json.dumps(payload).encode("utf-8")
+    req = urllib.request.Request(url, data=data, headers=headers, method="POST")
+    with urllib.request.urlopen(req, timeout=15) as resp:
+        body = resp.read().decode("utf-8")
+    parsed = json.loads(body)
+    # standard response path
+    content = parsed.get("choices", [])[0].get("message", {}).get("content", "")
+    return content
+
+
+def generate_list(db: Dict[str, List[Dict[str, str]]], user: str, prompt: str, use_ai: bool = False) -> None:
+    """Generate tasks for `user` from `prompt`.
+
+    If `use_ai` is True and `OPENAI_API_KEY` env var is set, the prompt will be sent to OpenAI
+    to produce a JSON array of tasks. Otherwise a safe fallback parser splits the prompt into
+    list items (by newline or comma).
+    """
+    rec = ensure_user_record(db, user)
+
+    generated: List[Dict[str, object]] = []
+
+    if use_ai:
+        try:
+            content = _call_openai_chat(prompt)
+        except Exception:
+            print("generation failed: no AI available")
+            return
+
+        # try to parse the assistant content as JSON array
+        try:
+            items = json.loads(content)
+            if isinstance(items, list):
+                for it in items:
+                    if isinstance(it, dict) and it.get("text"):
+                        generated.append(it)
+        except Exception:
+            # try to extract JSON substring
+            start = content.find("[")
+            end = content.rfind("]")
+            if start != -1 and end != -1 and end > start:
+                try:
+                    items = json.loads(content[start : end + 1])
+                    if isinstance(items, list):
+                        for it in items:
+                            if isinstance(it, dict) and it.get("text"):
+                                generated.append(it)
+                except Exception:
+                    pass
+
+        # If AI was requested but parsing returned nothing, treat as failure and stop
+        if not generated:
+            print("generation failed: no AI available")
+            return
+
+    # fallback if nothing generated via AI
+    if not generated:
+        # simple parsing: split by newline, then commas
+        parts: List[str] = []
+        if "\n" in prompt:
+            parts = [p.strip() for p in prompt.splitlines() if p.strip()]
+        elif "," in prompt:
+            parts = [p.strip() for p in prompt.split(",") if p.strip()]
+        else:
+            # split by semicolon or use whole prompt as one item
+            if ";" in prompt:
+                parts = [p.strip() for p in prompt.split(";") if p.strip()]
+            else:
+                parts = [prompt.strip()] if prompt.strip() else []
+
+        for p in parts:
+            generated.append({"text": p, "category": "", "priority": False})
+
+    # store generated tasks
+    added = 0
+    for item in generated:
+        text = item.get("text")
+        if not text:
+            continue
+        category = item.get("category", "") or ""
+        priority = bool(item.get("priority", False))
+        add_task(db, user, text, category, priority)
+        added += 1
+
+    print(f"Generated and added {added} tasks for user '{user}'.")
+
+
 def interactive_mode(user: str) -> None:
     db = load_db()
     print(f"Interactive mode for user '{user}'. Type 'help' for commands.")
@@ -398,6 +517,28 @@ def interactive_mode(user: str) -> None:
                 continue
             recommend_task(db, user, style)
             continue
+        if action == "generate":
+            # generate <prompt>  (optional ai: provide 'ai' as the second token)
+            prompt = arg
+            use_ai = False
+            if not prompt:
+                try:
+                    prompt = input("Prompt to generate tasks from: ").strip()
+                except (EOFError, KeyboardInterrupt):
+                    print("No prompt provided.")
+                    continue
+            # allow 'generate ai <prompt>' style or ask
+            if prompt.startswith("ai "):
+                use_ai = True
+                prompt = prompt[3:].strip()
+            else:
+                try:
+                    ans = input("Use AI? (y/N): ").strip().lower()
+                except (EOFError, KeyboardInterrupt):
+                    ans = ""
+                use_ai = ans in ("y", "yes")
+            generate_list(db, user, prompt, use_ai)
+            continue
         if action == "current":
             show_current(db, user)
             continue
@@ -447,6 +588,10 @@ def main(argv: List[str] | None = None) -> int:
 
     p_recommend = sub.add_parser("recommend", help="Recommend a task based on current task and style")
     p_recommend.add_argument("--style", "-s", choices=["type", "dispersed"], help="Recommendation style: type or dispersed")
+
+    p_generate = sub.add_parser("generate", help="Generate tasks from a prompt (AI or fallback)")
+    p_generate.add_argument("text", nargs="+", help="Prompt text to generate tasks from")
+    p_generate.add_argument("--ai", action="store_true", help="Use AI (requires OPENAI_API_KEY env var)")
 
     p_promote = sub.add_parser("promote", help="Mark a task as priority by index")
     p_promote.add_argument("index", type=int, help="1-based index of task to promote")
@@ -514,6 +659,11 @@ def main(argv: List[str] | None = None) -> int:
             print("Invalid style. Use 'type' or 'dispersed'.")
             return 2
         recommend_task(db, user, style)
+        return 0
+    if args.cmd == "generate":
+        prompt = " ".join(args.text)
+        use_ai = bool(getattr(args, "ai", False))
+        generate_list(db, user, prompt, use_ai)
         return 0
     if args.cmd == "promote":
         promote_task(db, user, args.index)

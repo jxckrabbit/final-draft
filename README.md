@@ -165,3 +165,16 @@ If you'd like, I can:
 - add search or edit commands
 - add tests or packaging
 - wire this up to a small GUI or web frontend
+
+Generate (AI + fallback)
+```powershell
+# Generate tasks from a prompt using fallback parsing:
+python tasks.py --user alice generate "Buy groceries, Call Bob, Clean desk"
+
+# Use AI to generate tasks (requires OPENAI_API_KEY env var):
+setx OPENAI_API_KEY "your_api_key_here"
+python tasks.py --user alice generate "Weekend chores: clean, laundry, grocery list" --ai
+
+# Interactive: run `python tasks.py interactive` then type:
+#   generate  (you will be prompted for the prompt and whether to use AI)
+```
