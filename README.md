@@ -20,6 +20,70 @@ python tasks.py --user alice clear
 
 # add with category
 python tasks.py --user alice add "Buy milk" --category groceries
+
+# list only tasks in a category
+python tasks.py --user alice list --category groceries
+```
+
+Current task
+```powershell
+# select a task as the current one (by index shown in `list`)
+python tasks.py --user alice select 2
+
+# show current
+python tasks.py --user alice current
+
+# clear current
+python tasks.py --user alice unselect
+```
+
+Interactive mode notes
+- In interactive mode you can run `list` or `list <category>` to filter by category.
+- When adding (`add <text>`) the CLI will prompt for an optional category.
+
+Data model
+- Data is stored in `tasks_db.json` as a mapping of username -> record.
+- Each user record is an object: `{"tasks": [...], "current": "<created_at>"}`.
+- Tasks have `text`, `created_at` (UTC ISO), `done` flag, and an optional `category` string.
+
+Next steps I can help with:
+- add `list --category` to support partial matches or case-insensitive matching
+- add an `edit` command to change task text or category
+- add unit tests for migration and current-task behavior
+# Per-user Tasks CLI
+
+This is a small command-line tool to store task lists per username.
+
+Files
+- `tasks.py`: CLI script. Creates `tasks_db.json` beside the script to persist data.
+
+Quick usage (PowerShell):
+
+```powershell
+# interactive mode (prompts for username)
+python tasks.py interactive
+
+# or specify a user and add/list/remove/clear
+python tasks.py --user alice add "Buy milk"
+python tasks.py --user alice list
+python tasks.py --user alice remove 1
+python tasks.py --user alice done 2
+python tasks.py --user alice clear
+
+# add with category
+python tasks.py --user alice add "Buy milk" --category groceries
+```
+
+# current task
+```powershell
+# select a task as the current one (by index shown in `list`)
+python tasks.py --user alice select 2
+
+# show current
+python tasks.py --user alice current
+
+# clear current
+python tasks.py --user alice unselect
 ```
 
 Notes
