@@ -14,6 +14,7 @@ import argparse
 import json
 import sys
 from datetime import datetime
+import random
 from pathlib import Path
 from typing import Dict, List
 
@@ -184,6 +185,60 @@ def unselect_current(db: Dict[str, List[Dict[str, str]]], user: str) -> None:
     print("Cleared current task.")
 
 
+def recommend_task(db: Dict[str, List[Dict[str, str]]], user: str, style: str) -> None:
+    """Recommend a task for `user`.
+
+    style: 'type' -> recommend a task in the same category as current
+           'dispersed' -> recommend a task in a different category than current
+    The recommended task becomes the new current task.
+    """
+    rec = db.get(user)
+    if not rec:
+        print(f"No tasks for user '{user}'.")
+        return
+    rec = ensure_user_record(db, user)
+    current_id = rec.get("current", "")
+    if not current_id:
+        # Fallback behavior: no current task set — pick a random not-done task as recommendation.
+        tasks = rec.get("tasks", [])
+        candidates = [t for t in tasks if not t.get("done")]
+        if not candidates:
+            print("No available (not-done) tasks to recommend.")
+            return
+        chosen = random.choice(candidates)
+        rec["current"] = chosen.get("created_at", "")
+        save_db(db)
+        print(f"No current task set — fallback recommended and selected: {chosen.get('text')} [{chosen.get('category','')}]")
+        return
+    tasks = rec.get("tasks", [])
+    current = None
+    for t in tasks:
+        if t.get("created_at") == current_id:
+            current = t
+            break
+    if current is None:
+        print("Current task not found. It may have been removed.")
+        return
+
+    cur_cat = (current.get("category") or "")
+    # choose candidates depending on style
+    if style == "type":
+        candidates = [t for t in tasks if (t.get("category") or "") == cur_cat and t.get("created_at") != current_id and not t.get("done")]
+    else:
+        # dispersed: different category and not done
+        candidates = [t for t in tasks if (t.get("category") or "") != cur_cat and not t.get("done")]
+
+    if not candidates:
+        print(f"No recommendation found for style '{style}'.")
+        return
+
+    # Pick a candidate (random for variety)
+    chosen = random.choice(candidates)
+    rec["current"] = chosen.get("created_at", "")
+    save_db(db)
+    print(f"Recommended and selected current task: {chosen.get('text')} [{chosen.get('category','')}]")
+
+
 def interactive_mode(user: str) -> None:
     db = load_db()
     print(f"Interactive mode for user '{user}'. Type 'help' for commands.")
@@ -229,6 +284,20 @@ def interactive_mode(user: str) -> None:
                 print("Usage: select <index>")
                 continue
             select_task(db, user, int(arg))
+            continue
+        if action == "recommend":
+            # recommend [style]
+            style = arg.strip().lower() if arg else ""
+            if not style:
+                try:
+                    style = input("Style (type/dispersed): ").strip()
+                except (EOFError, KeyboardInterrupt):
+                    print("No style provided.")
+                    continue
+            if style not in ("type", "dispersed"):
+                print("Invalid style. Use 'type' or 'dispersed'.")
+                continue
+            recommend_task(db, user, style)
             continue
         if action == "current":
             show_current(db, user)
@@ -276,6 +345,9 @@ def main(argv: List[str] | None = None) -> int:
 
     p_unselect = sub.add_parser("unselect", help="Clear current task for user")
 
+    p_recommend = sub.add_parser("recommend", help="Recommend a task based on current task and style")
+    p_recommend.add_argument("--style", "-s", choices=["type", "dispersed"], help="Recommendation style: type or dispersed")
+
     p_inter = sub.add_parser("interactive", help="Enter interactive mode (prompts for user if omitted)")
 
     args = parser.parse_args(argv)
@@ -320,6 +392,19 @@ def main(argv: List[str] | None = None) -> int:
         return 0
     if args.cmd == "unselect":
         unselect_current(db, user)
+        return 0
+    if args.cmd == "recommend":
+        style = getattr(args, "style", None)
+        if not style:
+            try:
+                style = input("Style (type/dispersed): ").strip()
+            except (EOFError, KeyboardInterrupt):
+                print("No style provided.")
+                return 1
+        if style not in ("type", "dispersed"):
+            print("Invalid style. Use 'type' or 'dispersed'.")
+            return 2
+        recommend_task(db, user, style)
         return 0
     if args.cmd == "clear":
         clear_tasks(db, user)

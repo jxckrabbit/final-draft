@@ -1,3 +1,4 @@
+# Current task
 # Per-user Tasks CLI
 
 This is a small command-line tool to store task lists per username.
@@ -36,6 +37,23 @@ python tasks.py --user alice current
 # clear current
 python tasks.py --user alice unselect
 ```
+
+# recommend
+```powershell
+# recommend with style provided on command line
+python tasks.py --user alice recommend --style type
+
+# or prompt for style (interactive):
+python tasks.py --user alice recommend
+
+# In interactive mode:
+python tasks.py interactive
+# then: recommend (you will be prompted for style)
+```
+
+Fallback behavior
+- If there is no current task set, `recommend` will fall back to selecting a random not-done task and set it as the current task.
+
 
 Interactive mode notes
 - In interactive mode you can run `list` or `list <category>` to filter by category.
