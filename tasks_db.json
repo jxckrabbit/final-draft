@@ -10,5 +10,35 @@
       }
     ],
     "current": ""
+  },
+  "jack": {
+    "tasks": [],
+    "current": ""
+  },
+  "andre": {
+    "tasks": [
+      {
+        "text": "Grading",
+        "created_at": "2025-11-25T02:26:24.444733",
+        "done": false,
+        "category": "business",
+        "priority": true
+      },
+      {
+        "text": "Clean",
+        "created_at": "2025-11-25T02:26:41.863757",
+        "done": false,
+        "category": "household",
+        "priority": false
+      },
+      {
+        "text": "Feed Annika",
+        "created_at": "2025-11-25T02:26:56.749985",
+        "done": false,
+        "category": "household",
+        "priority": false
+      }
+    ],
+    "current": "2025-11-25T02:26:24.444733"
   }
 }
