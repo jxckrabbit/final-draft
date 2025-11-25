@@ -51,7 +51,7 @@ def save_db(db: Dict[str, List[Dict[str, str]]]) -> None:
 
 def list_tasks(db: Dict[str, List[Dict[str, str]]], user: str, category: str | None = None) -> None:
     rec = db.get(user)
-    if not rec:
+    if rec is None:
         print(f"No tasks for user '{user}'.")
         return
     tasks = rec.get("tasks", []) if isinstance(rec, dict) else rec
@@ -107,7 +107,7 @@ def add_task(db: Dict[str, List[Dict[str, str]]], user: str, text: str, category
 
 def remove_task(db: Dict[str, List[Dict[str, str]]], user: str, index: int) -> None:
     rec = db.get(user)
-    if not rec:
+    if rec is None:
         print(f"No tasks for user '{user}'.")
         return
     tasks = rec.get("tasks", []) if isinstance(rec, dict) else rec
@@ -132,7 +132,7 @@ def clear_tasks(db: Dict[str, List[Dict[str, str]]], user: str) -> None:
 
 def mark_done(db: Dict[str, List[Dict[str, str]]], user: str, index: int) -> None:
     rec = db.get(user)
-    if not rec:
+    if rec is None:
         print(f"No tasks for user '{user}'.")
         return
     tasks = rec.get("tasks", []) if isinstance(rec, dict) else rec
@@ -146,7 +146,7 @@ def mark_done(db: Dict[str, List[Dict[str, str]]], user: str, index: int) -> Non
 
 def select_task(db: Dict[str, List[Dict[str, str]]], user: str, index: int) -> None:
     rec = db.get(user)
-    if not rec:
+    if rec is None:
         print(f"No tasks for user '{user}'.")
         return
     tasks = rec.get("tasks", []) if isinstance(rec, dict) else rec
@@ -162,7 +162,7 @@ def select_task(db: Dict[str, List[Dict[str, str]]], user: str, index: int) -> N
 
 def show_current(db: Dict[str, List[Dict[str, str]]], user: str) -> None:
     rec = db.get(user)
-    if not rec:
+    if rec is None:
         print(f"No tasks for user '{user}'.")
         return
     rec = ensure_user_record(db, user)
@@ -182,7 +182,7 @@ def show_current(db: Dict[str, List[Dict[str, str]]], user: str) -> None:
 
 def unselect_current(db: Dict[str, List[Dict[str, str]]], user: str) -> None:
     rec = db.get(user)
-    if not rec:
+    if rec is None:
         print(f"No tasks for user '{user}'.")
         return
     rec = ensure_user_record(db, user)
@@ -199,7 +199,7 @@ def recommend_task(db: Dict[str, List[Dict[str, str]]], user: str, style: str) -
     The recommended task becomes the new current task.
     """
     rec = db.get(user)
-    if not rec:
+    if rec is None:
         print(f"No tasks for user '{user}'.")
         return
     rec = ensure_user_record(db, user)
@@ -263,7 +263,7 @@ def recommend_task(db: Dict[str, List[Dict[str, str]]], user: str, style: str) -
 
 def promote_task(db: Dict[str, List[Dict[str, str]]], user: str, index: int) -> None:
     rec = db.get(user)
-    if not rec:
+    if rec is None:
         print(f"No tasks for user '{user}'.")
         return
     rec = ensure_user_record(db, user)
@@ -278,7 +278,7 @@ def promote_task(db: Dict[str, List[Dict[str, str]]], user: str, index: int) -> 
 
 def demote_task(db: Dict[str, List[Dict[str, str]]], user: str, index: int) -> None:
     rec = db.get(user)
-    if not rec:
+    if rec is None:
         print(f"No tasks for user '{user}'.")
         return
     rec = ensure_user_record(db, user)
@@ -293,7 +293,7 @@ def demote_task(db: Dict[str, List[Dict[str, str]]], user: str, index: int) -> N
 
 def list_priorities(db: Dict[str, List[Dict[str, str]]], user: str) -> None:
     rec = db.get(user)
-    if not rec:
+    if rec is None:
         print(f"No tasks for user '{user}'.")
         return
     rec = ensure_user_record(db, user)
